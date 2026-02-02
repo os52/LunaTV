@@ -69,8 +69,18 @@ export async function POST(request: NextRequest) {
         if (!key || !name || !api) {
           return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
         }
-        if (adminConfig.SourceConfig.some((s) => s.key === key)) {
+        // 只检查自定义源是否存在，允许覆盖配置文件中的源
+        const existingSource = adminConfig.SourceConfig.find((s) => s.key === key);
+        if (existingSource && existingSource.from === 'custom') {
           return NextResponse.json({ error: '该源已存在' }, { status: 400 });
+        }
+        // 如果是配置文件中的源，则更新为自定义源
+        if (existingSource && existingSource.from === 'config') {
+          // 移除旧的配置文件源
+          const index = adminConfig.SourceConfig.findIndex((s) => s.key === key);
+          if (index !== -1) {
+            adminConfig.SourceConfig.splice(index, 1);
+          }
         }
         adminConfig.SourceConfig.push({
           key,
@@ -335,7 +345,7 @@ export async function POST(request: NextRequest) {
 
     // 持久化到存储
     await db.saveAdminConfig(adminConfig);
-    
+
     // 清除配置缓存，强制下次重新从数据库读取
     clearConfigCache();
 
